@@ -2,9 +2,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from models import Base
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Database URL - supports both SQLite (development) and PostgreSQL (production)
 DATABASE_URL = os.environ.get(

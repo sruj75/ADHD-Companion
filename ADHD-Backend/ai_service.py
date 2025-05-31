@@ -38,15 +38,21 @@ class AdaptiveAIService:
     def __init__(self):
         # Initialize OpenAI client for Groq with simplified configuration
         try:
-            self.client = openai.OpenAI(
-                base_url="https://api.groq.com/openai/v1",
-                api_key=os.environ.get("GROQ_API_KEY"),
-                timeout=30.0
-            )
-            print("✅ AI service initialized successfully")
+            # Check if GROQ_API_KEY is available
+            groq_api_key = os.environ.get("GROQ_API_KEY")
+            if not groq_api_key or groq_api_key == "your_groq_api_key_here":
+                print("⚠️ No GROQ_API_KEY found - running in mock mode")
+                self.client = None
+            else:
+                self.client = openai.OpenAI(
+                    base_url="https://api.groq.com/openai/v1",
+                    api_key=groq_api_key,
+                    timeout=30.0
+                )
+                print("✅ AI service initialized successfully with Groq API")
         except Exception as e:
             print(f"⚠️ AI service initialization warning: {e}")
-            # Create a mock client for development if API key is missing
+            print("Running in mock mode - add GROQ_API_KEY to enable AI features")
             self.client = None
         
         self.model = "llama-3.1-70b-versatile"

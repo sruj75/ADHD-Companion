@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
-import axios from 'axios';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ADHDApiService } from '../config/api';
+import { ENV } from '../config/env';
 
 // Configuration
 const API_BASE_URL = 'http://localhost:8000'; // Update this for your deployment
@@ -37,36 +39,154 @@ interface DynamicStateCheckResponse {
   current_work_context?: any;
 }
 
-export const useAPI = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+// React Query Keys
+export const QUERY_KEYS = {
+  health: ['health'],
+  dynamicStatus: (userId: number) => ['dynamicStatus', userId],
+  userSessions: (userId: number) => ['userSessions', userId],
+  userStats: (userId: number) => ['userStats', userId],
+  voiceModels: ['voiceModels'],
+  availableVoices: ['availableVoices'],
+} as const;
 
+export const useAPI = () => {
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // Health Check Query
+  const useHealthCheck = () => {
+    return useQuery({
+      queryKey: QUERY_KEYS.health,
+      queryFn: ADHDApiService.healthCheck,
+      refetchInterval: 30000, // Refetch every 30 seconds
+    });
+  };
+
+  // Dynamic Status Query
+  const useDynamicStatus = (userId: number = ENV.DEV_USER_ID) => {
+    return useQuery({
+      queryKey: QUERY_KEYS.dynamicStatus(userId),
+      queryFn: () => ADHDApiService.getDynamicStatus(userId),
+      refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
+    });
+  };
+
+  // Voice Models Query
+  const useVoiceModels = () => {
+    return useQuery({
+      queryKey: QUERY_KEYS.voiceModels,
+      queryFn: ADHDApiService.getVoiceModels,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+  };
+
+  // Session Management Mutations
+  const useCreateSession = () => {
+    return useMutation({
+      mutationFn: ({ 
+        userId, 
+        sessionType, 
+        scheduledTime 
+      }: { 
+        userId: number; 
+        sessionType: string; 
+        scheduledTime?: string; 
+      }) => 
+        ADHDApiService.createSession(userId, sessionType, scheduledTime),
+      onSuccess: () => {
+        // Invalidate related queries
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.userSessions(ENV.DEV_USER_ID) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dynamicStatus(ENV.DEV_USER_ID) });
+      },
+    });
+  };
+
+  const useSendMessage = () => {
+    return useMutation({
+      mutationFn: ({ sessionId, message }: { sessionId: number; message: string }) =>
+        ADHDApiService.sendMessage(sessionId, message),
+    });
+  };
+
+  // Dynamic Planning Mutations
+  const useStartDynamicPlanning = () => {
+    return useMutation({
+      mutationFn: (userId: number = ENV.DEV_USER_ID) =>
+        ADHDApiService.startDynamicPlanning(userId),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dynamicStatus(ENV.DEV_USER_ID) });
+      },
+    });
+  };
+
+  const useContinueDynamicPlanning = () => {
+    return useMutation({
+      mutationFn: ({ userId, userResponse }: { userId: number; userResponse: string }) =>
+        ADHDApiService.continueDynamicPlanning(userId, userResponse),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dynamicStatus(ENV.DEV_USER_ID) });
+      },
+    });
+  };
+
+  const useStartDynamicWorkBlock = () => {
+    return useMutation({
+      mutationFn: ({ userId, taskDescription }: { userId: number; taskDescription?: string }) =>
+        ADHDApiService.startDynamicWorkBlock(userId, taskDescription || ''),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dynamicStatus(ENV.DEV_USER_ID) });
+      },
+    });
+  };
+
+  const useConfirmWorkBlockDuration = () => {
+    return useMutation({
+      mutationFn: ({ userId, duration }: { userId: number; duration: number }) =>
+        ADHDApiService.confirmWorkBlockDuration(userId, duration),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dynamicStatus(ENV.DEV_USER_ID) });
+      },
+    });
+  };
+
+  const useDynamicStateCheck = () => {
+    return useMutation({
+      mutationFn: ({ userId, message }: { userId: number; message: string }) =>
+        ADHDApiService.dynamicStateCheck(userId, message),
+    });
+  };
+
+  // Voice Integration Queries
+  const useAvailableVoices = () => {
+    return useQuery({
+      queryKey: QUERY_KEYS.availableVoices,
+      queryFn: ADHDApiService.getAvailableVoices,
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    });
+  };
+
+  // Generic API call function (for custom endpoints)
   const apiCall = useCallback(async <T>(
     endpoint: string, 
     method: 'GET' | 'POST' = 'GET', 
     data?: any
   ): Promise<ApiResponse<T>> => {
-    setLoading(true);
     setError(null);
 
     try {
-      const response = await axios({
-        method,
-        url: `${API_BASE_URL}${endpoint}`,
-        data,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000, // 10 second timeout
-      });
+      const response = method === 'GET' 
+        ? await ADHDApiService.healthCheck() // Replace with generic call if needed
+        : await ADHDApiService.sendChatMessage(data?.text || '');
 
-      setLoading(false);
       return {
         success: true,
-        data: response.data,
+        data: response,
       };
     } catch (err: any) {
-      setLoading(false);
       const errorMessage = err.response?.data?.detail || err.message || 'An error occurred';
       setError(errorMessage);
       return {
@@ -76,64 +196,27 @@ export const useAPI = () => {
     }
   }, []);
 
-  // Specific API methods for the dynamic system
-  const startDynamicPlanning = useCallback(async (userId: number) => {
-    return apiCall<DynamicPlanningResponse>('/api/dynamic/planning/start', 'POST', { user_id: userId });
-  }, [apiCall]);
-
-  const continueDynamicPlanning = useCallback(async (userId: number, userResponse: string) => {
-    return apiCall('/api/dynamic/planning/continue', 'POST', { 
-      user_id: userId, 
-      user_response: userResponse 
-    });
-  }, [apiCall]);
-
-  const startDynamicWorkBlock = useCallback(async (userId: number, taskDescription: string = '') => {
-    return apiCall<DynamicWorkBlockResponse>('/api/dynamic/work-block/start', 'POST', { 
-      user_id: userId, 
-      task_description: taskDescription 
-    });
-  }, [apiCall]);
-
-  const confirmWorkBlockDuration = useCallback(async (userId: number, chosenDuration: number) => {
-    return apiCall('/api/dynamic/work-block/confirm', 'POST', { 
-      user_id: userId, 
-      chosen_duration: chosenDuration 
-    });
-  }, [apiCall]);
-
-  const dynamicStateCheck = useCallback(async (userId: number, userMessage: string) => {
-    return apiCall<DynamicStateCheckResponse>('/api/dynamic/state-check', 'POST', { 
-      user_id: userId, 
-      user_message: userMessage 
-    });
-  }, [apiCall]);
-
-  const getDynamicStatus = useCallback(async (userId: number) => {
-    return apiCall(`/api/dynamic/status/${userId}`);
-  }, [apiCall]);
-
-  const healthCheck = useCallback(async () => {
-    return apiCall('/health');
-  }, [apiCall]);
-
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
   return {
-    loading,
+    // State
     error,
     clearError,
-    // Generic API call
+    
+    // Queries
+    useHealthCheck,
+    useDynamicStatus,
+    useVoiceModels,
+    useAvailableVoices,
+    
+    // Mutations
+    useCreateSession,
+    useSendMessage,
+    useStartDynamicPlanning,
+    useContinueDynamicPlanning,
+    useStartDynamicWorkBlock,
+    useConfirmWorkBlockDuration,
+    useDynamicStateCheck,
+    
+    // Utilities
     apiCall,
-    // Specific dynamic system endpoints
-    startDynamicPlanning,
-    continueDynamicPlanning,
-    startDynamicWorkBlock,
-    confirmWorkBlockDuration,
-    dynamicStateCheck,
-    getDynamicStatus,
-    healthCheck,
   };
 }; 

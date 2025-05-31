@@ -6,40 +6,79 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { useAPI } from '../hooks/useAPI';
+import { ENV } from '../config/env';
 
 const { width, height } = Dimensions.get('window');
 
-// Mock session state - replace with real API
-const mockSessionState = {
-  hasActiveSession: false, // Toggle this to show different states
-  nextSessionTime: 25 * 60 + 30, // 25:30 in seconds - TODO: Make this dynamic from backend
-  sessionType: "Morning Planning"
-};
-
 // LAYERED LOGIC:
 // 1. If there are active sessions -> show [Active Session] 
-// 2. If no active sessions -> show [Timer Mode] with countdown
+// 2. If no active sessions -> show [Timer Mode] with real countdown from backend
 // 3. Always show "Talk to AI Now" as override option
 
 export default function AdaptiveDashboard() {
-  const [timeRemaining, setTimeRemaining] = useState(mockSessionState.nextSessionTime);
-  const [hasActiveSession, setHasActiveSession] = useState(mockSessionState.hasActiveSession);
   const router = useRouter();
+  const { useDynamicStatus, useHealthCheck, useStartDynamicPlanning } = useAPI();
 
-  // Countdown timer for next session
+  // Get real-time data from backend
+  const { 
+    data: healthData, 
+    isLoading: healthLoading, 
+    error: healthError 
+  } = useHealthCheck();
+
+  const { 
+    data: dynamicStatus, 
+    isLoading: statusLoading, 
+    error: statusError,
+    refetch: refetchStatus
+  } = useDynamicStatus(ENV.DEV_USER_ID);
+
+  const startPlanningMutation = useStartDynamicPlanning();
+
+  // Local countdown state (only used when backend provides next session time)
+  const [localCountdown, setLocalCountdown] = useState<number | null>(null);
+
+  // Extract REAL session state from backend data
+  const hasActiveSession = dynamicStatus?.status?.has_active_conversation || 
+                          (dynamicStatus?.status?.active_work_blocks?.length > 0);
+  
+  // Use real backend timer or show "Ready to start"
+  const backendSessionTime = dynamicStatus?.status?.next_session_time;
+  const sessionType = dynamicStatus?.status?.conversation_state || "Dynamic Planning";
+
+  // Real-time countdown from backend data
   useEffect(() => {
-    if (!hasActiveSession && timeRemaining > 0) {
+    if (typeof backendSessionTime === 'number' && backendSessionTime > 0) {
+      setLocalCountdown(backendSessionTime);
+    } else {
+      setLocalCountdown(null); // No active timer
+    }
+  }, [backendSessionTime]);
+
+  // Only run countdown if we have a real timer from backend
+  useEffect(() => {
+    if (localCountdown && localCountdown > 0 && !hasActiveSession) {
       const interval = setInterval(() => {
-        setTimeRemaining(prev => prev - 1);
+        setLocalCountdown(prev => {
+          if (prev && prev > 1) {
+            return prev - 1;
+          } else {
+            // Timer finished - trigger backend to start session
+            refetchStatus();
+            return 0;
+          }
+        });
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [hasActiveSession, timeRemaining]);
+  }, [localCountdown, hasActiveSession, refetchStatus]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -47,10 +86,25 @@ export default function AdaptiveDashboard() {
     return `${mins}:${String(secs).padStart(2, '0')}`;
   };
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setHasActiveSession(true);
-    router.push('/session');
+    
+    if (hasActiveSession) {
+      // Navigate to existing session
+      router.push('/session');
+    } else {
+      // Start new dynamic planning session via backend
+      try {
+        const response = await startPlanningMutation.mutateAsync(ENV.DEV_USER_ID);
+        if (response.success) {
+          router.push('/session');
+        } else {
+          Alert.alert('Error', 'Failed to start session. Please try again.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Could not connect to backend. Please check if the server is running.');
+      }
+    }
   };
 
   const handleTalkToAI = () => {
@@ -58,54 +112,123 @@ export default function AdaptiveDashboard() {
     router.push('/session');
   };
 
+  // Show connection status
+  const isConnected = healthData?.status === 'healthy';
+  const isLoading = healthLoading || statusLoading;
+
+  // Determine what to show in timer section
+  const getTimerDisplay = () => {
+    if (hasActiveSession) {
+      return {
+        label: '[Active Session]',
+        text: 'Continue Session',
+        subtext: `${sessionType} (Active)`,
+        isTimer: false
+      };
+    } else if (localCountdown && localCountdown > 0) {
+      return {
+        label: '[Timer Mode]',
+        text: formatTime(localCountdown),
+        subtext: 'Next session starting automatically',
+        isTimer: true
+      };
+    } else {
+      return {
+        label: '[Ready]',
+        text: 'Start Planning',
+        subtext: 'Tap to begin your ADHD session',
+        isTimer: false
+      };
+    }
+  };
+
+  const timerDisplay = getTimerDisplay();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Simple Header */}
+      {/* Header with Connection Status */}
       <View style={styles.header}>
         <Text style={styles.title}>ADHD Companion</Text>
+        <View style={styles.statusRow}>
+          <View style={[
+            styles.statusDot, 
+            { backgroundColor: isConnected ? '#2ecc71' : '#e74c3c' }
+          ]} />
+          <Text style={[
+            styles.statusText,
+            { color: isConnected ? '#2ecc71' : '#e74c3c' }
+          ]}>
+            {isLoading ? 'Connecting...' : isConnected ? 'Connected' : 'Offline'}
+          </Text>
+        </View>
+        {dynamicStatus?.status && (
+          <Text style={styles.systemInfo}>
+            System: {dynamicStatus.status.system_type || 'Dynamic AI'}
+          </Text>
+        )}
       </View>
 
       <View style={styles.content}>
         
-        {/* Active Session OR Timer Mode */}
-        {hasActiveSession ? (
-          // Active Session State
-          <View style={styles.sessionContainer}>
-            <Text style={styles.sectionLabel}>[Active Session]</Text>
-            <TouchableOpacity 
-              style={styles.sessionButton}
-              onPress={handleStartSession}
-            >
-              <Text style={styles.sessionButtonText}>Start Session</Text>
-              <Text style={styles.sessionStatusText}>(Available)</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Timer Mode State
-          <View style={styles.sessionContainer}>
-            <Text style={styles.sectionLabel}>[Timer Mode]</Text>
-            <View style={styles.timerBox}>
-              <Text style={styles.timerLabel}>Next Session In</Text>
-              <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-            </View>
-          </View>
-        )}
+        {/* Dynamic Session State */}
+        <View style={styles.sessionContainer}>
+          <Text style={styles.sectionLabel}>{timerDisplay.label}</Text>
+          <TouchableOpacity 
+            style={[
+              timerDisplay.isTimer ? styles.timerBox : styles.sessionButton,
+              !isConnected && { opacity: 0.6 }
+            ]}
+            onPress={handleStartSession}
+            disabled={startPlanningMutation.isPending || !isConnected}
+          >
+            <Text style={timerDisplay.isTimer ? styles.timerLabel : styles.sessionButtonText}>
+              {startPlanningMutation.isPending ? 'Starting...' : timerDisplay.text}
+            </Text>
+            {timerDisplay.isTimer ? (
+              <Text style={styles.timerText}>{timerDisplay.text}</Text>
+            ) : null}
+            <Text style={timerDisplay.isTimer ? styles.timerSubtext : styles.sessionStatusText}>
+              {timerDisplay.subtext}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* OR Divider (only show when in timer mode) */}
+        {/* OR Divider (only show when not in active session) */}
         {!hasActiveSession && (
           <Text style={styles.orText}>OR</Text>
         )}
 
         {/* Talk to AI Now Button */}
         <TouchableOpacity 
-          style={styles.aiButton}
+          style={[
+            styles.aiButton,
+            { opacity: isConnected ? 1 : 0.6 }
+          ]}
           onPress={handleTalkToAI}
+          disabled={!isConnected}
         >
           <Text style={styles.aiButtonText}>Talk to AI Now</Text>
-          <Text style={styles.aiButtonSubtext}>(Override)</Text>
+          <Text style={styles.aiButtonSubtext}>
+            {isConnected ? '(Voice Mode)' : '(Offline)'}
+          </Text>
         </TouchableOpacity>
+
+        {/* Error Display */}
+        {(healthError || statusError) && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>
+              ⚠️ {healthError?.message || statusError?.message || 'Connection issue'}
+            </Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => refetchStatus()}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -216,5 +339,54 @@ const styles = StyleSheet.create({
   aiButtonSubtext: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  systemInfo: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    width: '100%',
+    padding: 20,
+    backgroundColor: '#f39c12',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2ecc71',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  retryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  timerSubtext: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginTop: 5,
   },
 });

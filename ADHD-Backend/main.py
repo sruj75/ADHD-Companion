@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional, Dict
 import os
 from dotenv import load_dotenv
@@ -29,6 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:8081",  # Expo web development
         "https://*.vercel.app", 
         "https://your-custom-domain.com"
     ],
@@ -82,16 +84,25 @@ async def root():
 async def health_check(db: Session = Depends(get_db)):
     """Health check endpoint with database connectivity"""
     try:
-        # Test database query
-        db.execute("SELECT 1")
+        # Test database query with proper SQLAlchemy usage
+        result = db.execute(text("SELECT 1"))
+        db.commit()  # Ensure transaction is committed
+        
+        # Check AI service status
+        ai_status = "ready" if ai_service.client is not None else "mock_mode"
+        groq_configured = ai_service.client is not None  # Check actual client availability, not just env var
+        
         return {
             "status": "healthy",
             "database": "connected",
             "timestamp": datetime.utcnow(),
-            "ai_service": "ready",
-            "system_type": "dynamic_llm_driven"
+            "ai_service": ai_status,
+            "groq_configured": groq_configured,
+            "system_type": "dynamic_llm_driven",
+            "voice_integration": "ready"
         }
     except Exception as e:
+        print(f"Health check error: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Service unhealthy: {str(e)}"

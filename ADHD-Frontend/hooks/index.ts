@@ -1,1 +1,1 @@
-export { useAPI } from './useAPI'; 
+export { useAPI, QUERY_KEYS } from './useAPI'; 

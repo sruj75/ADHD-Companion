@@ -291,18 +291,17 @@ Frontend Foundation
 - [x] Session Dashboard screen
 - [x] Timer countdown UI
 - [x] Basic AI chat interface
+Voice Integration
+- [x] Speech-to-Text implementation
+- [x] Text-to-Speech integration
+- [x] Voice mode UI with pulsing feedback
+- [x] Real-time conversation flow
 
 ### 🔄 **Phase 1: Backend Core (Current Priority)**
 - [ ] **API Endpoints** - Connect the adaptive AI to the frontend
 
 ### 📱 **Phase 2: Frontend Foundation**
 - [ ] API integration
-
-### 🎙️ **Phase 3: Voice Integration**
-- [ ] Speech-to-Text implementation
-- [ ] Text-to-Speech integration
-- [ ] Voice mode UI with pulsing feedback
-- [ ] Real-time conversation flow
 
 ### ✨ **Phase 4: Polish & Testing**
 - [ ] UI/UX refinements

@@ -1,8 +1,6 @@
 fastapi
 uvicorn
-openai
 groq
-python-dotenv
 # Database and State Management
 sqlalchemy
 alembic

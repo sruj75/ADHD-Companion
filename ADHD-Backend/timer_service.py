@@ -84,7 +84,7 @@ class DynamicTimerService:
         """
         
         try:
-            response = await self.ai_service.client.chat.completions.create(
+            response = self.ai_service.client.chat.completions.create(
                 model=self.ai_service.model,
                 messages=[{"role": "system", "content": initial_prompt}],
                 temperature=0.7,
@@ -171,7 +171,7 @@ class DynamicTimerService:
         """
         
         try:
-            response = await self.ai_service.client.chat.completions.create(
+            response = self.ai_service.client.chat.completions.create(
                 model=self.ai_service.model,
                 messages=[{"role": "user", "content": dynamic_prompt}],
                 temperature=0.6,
@@ -257,7 +257,7 @@ class DynamicTimerService:
         """
         
         try:
-            response = await self.ai_service.client.chat.completions.create(
+            response = self.ai_service.client.chat.completions.create(
                 model=self.ai_service.model,
                 messages=[{"role": "user", "content": duration_prompt}],
                 temperature=0.6,
@@ -414,7 +414,7 @@ class DynamicTimerService:
         """
         
         try:
-            response = await self.ai_service.client.chat.completions.create(
+            response = self.ai_service.client.chat.completions.create(
                 model=self.ai_service.model,
                 messages=[{"role": "user", "content": adaptation_prompt}],
                 temperature=0.7,
@@ -507,7 +507,7 @@ class DynamicTimerService:
         """
         
         try:
-            response = await self.ai_service.client.chat.completions.create(
+            response = self.ai_service.client.chat.completions.create(
                 model=self.ai_service.model,
                 messages=[{"role": "user", "content": break_prompt}],
                 temperature=0.6,
