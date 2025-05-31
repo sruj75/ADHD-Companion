@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+from pydantic import BaseModel
 
 # Import our modules
 from database import get_db, create_tables, test_connection
@@ -13,7 +14,7 @@ from session_service import SessionService
 from models import SessionType, SessionStatus, User
 from ai_service import ai_service
 from timer_service import DynamicTimerService
-from voice_websocket import voice_websocket_manager
+from chat_service import chat_service
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,7 +22,7 @@ load_dotenv()
 # Initialize FastAPI
 app = FastAPI(
     title="ADHD Companion API",
-    description="Dynamic AI-powered executive function replacement for ADHD individuals - Now with Voice Integration",
+    description="Dynamic AI-powered executive function replacement for ADHD individuals - Text-Based Chat Interface",
     version="3.0.0"
 )
 
@@ -39,6 +40,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic models for request/response
+class ChatRequest(BaseModel):
+    user_id: Optional[int] = 1
+    text: str
+
+class ChatResponse(BaseModel):
+    success: bool
+    ai_response: str
+    error: Optional[str] = None
+    timestamp: Optional[str] = None
+
+class DynamicPlanningRequest(BaseModel):
+    user_id: int
+
+class DynamicContinueRequest(BaseModel):
+    user_id: int
+    user_response: str
+
+class DynamicStateCheckRequest(BaseModel):
+    user_id: int
+    user_message: str
+
+class WorkBlockStartRequest(BaseModel):
+    user_id: int
+    task_description: Optional[str] = ""
+
+class WorkBlockConfirmRequest(BaseModel):
+    user_id: int
+    chosen_duration: int
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and check connections on startup"""
@@ -52,15 +83,14 @@ async def startup_event():
     
     # Create tables if they don't exist
     create_tables()
-    print("✅ ADHD Companion API v3.0 with Voice Integration is ready!")
+    print("✅ ADHD Companion API v3.0 with Chat Interface is ready!")
 
 @app.get("/")
 async def root():
     return {
-        "message": "ADHD Companion API v3.0 - Fully Dynamic AI-Driven System with Voice Integration",
+        "message": "ADHD Companion API v3.0 - Fully Dynamic AI-Driven System with Chat Interface",
         "status": "healthy",
         "version": "3.0.0",
-        "groq_configured": bool(os.environ.get("GROQ_API_KEY")),
         "features": [
             "Dynamic AI Conversations for All Decisions",
             "Real-time Emotional State Detection", 
@@ -68,15 +98,14 @@ async def root():
             "Conversational Work Block Creation",
             "Dynamic Break Recommendations",
             "Executive Function Replacement",
-            "🎙️ Voice-First Interface with WebSocket STT/TTS",
-            "🗣️ Real-time Speech Processing with Groq APIs"
+            "💬 Text-Based Chat Interface",
+            "🤖 Context-Aware AI Conversations"
         ],
-        "system_type": "fully_dynamic_llm_driven_with_voice",
-        "voice_features": {
-            "speech_to_text": "Groq Whisper (ultra-fast)",
-            "text_to_speech": "Groq PlayAI (natural voices)",
-            "real_time": "WebSocket streaming",
-            "adhd_optimized": "Short responses, interruption support"
+        "system_type": "fully_dynamic_llm_driven_with_chat",
+        "chat_features": {
+            "text_processing": "Real-time AI responses",
+            "conversation_history": "Context-aware conversations",
+            "adhd_optimized": "Structured responses, clear guidance"
         }
     }
 
@@ -99,7 +128,7 @@ async def health_check(db: Session = Depends(get_db)):
             "ai_service": ai_status,
             "groq_configured": groq_configured,
             "system_type": "dynamic_llm_driven",
-            "voice_integration": "ready"
+            "chat_integration": "ready"
         }
     except Exception as e:
         print(f"Health check error: {e}")
@@ -279,12 +308,12 @@ async def send_message(
 
 @app.post("/api/dynamic/planning/start")
 async def start_dynamic_planning(
-    user_id: int,
+    request: DynamicPlanningRequest,
     dynamic_service: DynamicTimerService = Depends(get_dynamic_timer_service)
 ):
     """Start a completely dynamic planning conversation - NO hardcoded values"""
     try:
-        result = await dynamic_service.start_dynamic_planning_conversation(user_id)
+        result = await dynamic_service.start_dynamic_planning_conversation(request.user_id)
         
         return {
             "success": result["success"],
@@ -299,13 +328,12 @@ async def start_dynamic_planning(
 
 @app.post("/api/dynamic/planning/continue")
 async def continue_dynamic_planning(
-    user_id: int,
-    user_response: str,
+    request: DynamicContinueRequest,
     dynamic_service: DynamicTimerService = Depends(get_dynamic_timer_service)
 ):
     """Continue the dynamic planning conversation - AI decides what to ask next"""
     try:
-        result = await dynamic_service.continue_planning_conversation(user_id, user_response)
+        result = await dynamic_service.continue_planning_conversation(request.user_id, request.user_response)
         
         return {
             "success": result["success"],
@@ -363,13 +391,12 @@ async def confirm_dynamic_duration(
 
 @app.post("/api/dynamic/state-check")
 async def dynamic_state_check(
-    user_id: int,
-    user_message: str,
+    request: DynamicStateCheckRequest,
     dynamic_service: DynamicTimerService = Depends(get_dynamic_timer_service)
 ):
     """Real-time state check using AI conversation - NO hardcoded thresholds"""
     try:
-        result = await dynamic_service.dynamic_state_check(user_id, user_message)
+        result = await dynamic_service.dynamic_state_check(request.user_id, request.user_message)
         
         return {
             "success": result["success"],
@@ -514,100 +541,85 @@ async def get_emotional_patterns(
     }
 
 # =====================================
-# LEGACY CHAT ENDPOINT
+# CHAT MESSAGING ENDPOINTS
 # =====================================
 
+@app.post("/api/chat", response_model=ChatResponse)
+async def send_chat_message(request: ChatRequest):
+    """Send a chat message and get AI response"""
+    try:
+        if not request.text.strip():
+            return ChatResponse(
+                success=False,
+                error="Message text is required",
+                ai_response="Please provide a message to send."
+            )
+        
+        result = await chat_service.send_chat_message(request.user_id, request.text.strip())
+        
+        return ChatResponse(
+            success=result.get("success", True),
+            ai_response=result.get("ai_response", "No response available"),
+            error=result.get("error"),
+            timestamp=result.get("timestamp")
+        )
+    except Exception as e:
+        return ChatResponse(
+            success=False,
+            error=str(e),
+            ai_response="I'm having trouble processing your message right now. Could you please try again?"
+        )
+
+@app.get("/api/chat/history/{user_id}")
+async def get_chat_history(user_id: int, limit: int = 50):
+    """Get chat history for a user"""
+    try:
+        history = await chat_service.get_chat_history(user_id, limit)
+        return {
+            "success": True,
+            "user_id": user_id,
+            "chat_history": history,
+            "total_messages": len(history)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "chat_history": []
+        }
+
+@app.delete("/api/chat/history/{user_id}")
+async def clear_chat_history(user_id: int):
+    """Clear chat history for a user"""
+    try:
+        success = await chat_service.clear_chat_history(user_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Chat history cleared for user {user_id}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to clear chat history"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# Legacy chat endpoint for backward compatibility
 @app.post("/chat")
 async def legacy_chat(message: dict):
     """Legacy chat endpoint for backward compatibility"""
     try:
-        response = await ai_service.client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
-            messages=[{"role": "user", "content": message["text"]}],
-            temperature=0.7
-        )
-        return {"response": response.choices[0].message.content}
+        # Use default user ID for legacy endpoint
+        DEFAULT_USER_ID = 1
+        result = await chat_service.send_chat_message(DEFAULT_USER_ID, message["text"])
+        return {"response": result.get("ai_response", "No response available")}
     except Exception as e:
         return {"error": f"Failed to get AI response: {str(e)}"}
-
-# =====================================
-# 🎙️ VOICE WEBSOCKET ENDPOINT
-# =====================================
-
-@app.websocket("/ws/voice/{session_id}")
-async def voice_websocket_endpoint(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for real-time voice interactions
-    
-    Supports:
-    - Real-time audio streaming (STT)
-    - AI conversation processing  
-    - Speech synthesis streaming (TTS)
-    - Voice state management (listening/thinking/speaking)
-    - Interruption handling
-    """
-    await voice_websocket_manager.connect(websocket, session_id)
-    await voice_websocket_manager.handle_voice_session(websocket, session_id)
-
-# =====================================
-# REST API VOICE ENDPOINTS
-# =====================================
-
-@app.get("/api/voice/voices")
-async def get_available_voices():
-    """Get list of available TTS voices"""
-    from voice_service import voice_service
-    
-    return {
-        "available_voices": voice_service.get_available_voices(),
-        "default_voice": voice_service.default_voice,
-        "voice_recommendations": {
-            "calm": "Calum-PlayAI",
-            "professional": "Arista-PlayAI",
-            "friendly": "Mason-PlayAI", 
-            "warm": "Celeste-PlayAI",
-            "confident": "Atlas-PlayAI",
-            "gentle": "Quinn-PlayAI"
-        }
-    }
-
-@app.get("/api/voice/models") 
-async def get_voice_models():
-    """Get available STT and TTS models"""
-    return {
-        "stt_models": {
-            "whisper-large-v3-turbo": {
-                "description": "Fastest multilingual model",
-                "cost_per_hour": "$0.04",
-                "real_time_factor": "216x",
-                "languages": "multilingual"
-            },
-            "whisper-large-v3": {
-                "description": "Highest accuracy multilingual",
-                "cost_per_hour": "$0.111", 
-                "real_time_factor": "189x",
-                "languages": "multilingual"
-            },
-            "distil-whisper-large-v3-en": {
-                "description": "Fastest English-only",
-                "cost_per_hour": "$0.02",
-                "real_time_factor": "250x", 
-                "languages": "english_only"
-            }
-        },
-        "tts_models": {
-            "playai-tts": {
-                "description": "Natural English voices",
-                "voices": 19,
-                "languages": ["english"]
-            },
-            "playai-tts-arabic": {
-                "description": "Arabic voices",
-                "voices": 4,
-                "languages": ["arabic"]
-            }
-        }
-    }
 
 if __name__ == "__main__":
     import uvicorn

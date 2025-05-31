@@ -45,8 +45,6 @@ export const QUERY_KEYS = {
   dynamicStatus: (userId: number) => ['dynamicStatus', userId],
   userSessions: (userId: number) => ['userSessions', userId],
   userStats: (userId: number) => ['userStats', userId],
-  voiceModels: ['voiceModels'],
-  availableVoices: ['availableVoices'],
 } as const;
 
 export const useAPI = () => {
@@ -72,15 +70,6 @@ export const useAPI = () => {
       queryKey: QUERY_KEYS.dynamicStatus(userId),
       queryFn: () => ADHDApiService.getDynamicStatus(userId),
       refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
-    });
-  };
-
-  // Voice Models Query
-  const useVoiceModels = () => {
-    return useQuery({
-      queryKey: QUERY_KEYS.voiceModels,
-      queryFn: ADHDApiService.getVoiceModels,
-      staleTime: 5 * 60 * 1000, // 5 minutes
     });
   };
 
@@ -160,12 +149,11 @@ export const useAPI = () => {
     });
   };
 
-  // Voice Integration Queries
-  const useAvailableVoices = () => {
-    return useQuery({
-      queryKey: QUERY_KEYS.availableVoices,
-      queryFn: ADHDApiService.getAvailableVoices,
-      staleTime: 10 * 60 * 1000, // 10 minutes
+  // Chat Messaging
+  const useSendChatMessage = () => {
+    return useMutation({
+      mutationFn: ({ text, userId }: { text: string; userId?: number }) => 
+        ADHDApiService.sendChatMessage(text, userId || ENV.DEV_USER_ID),
     });
   };
 
@@ -204,19 +192,22 @@ export const useAPI = () => {
     // Queries
     useHealthCheck,
     useDynamicStatus,
-    useVoiceModels,
-    useAvailableVoices,
     
-    // Mutations
+    // Session Mutations
     useCreateSession,
     useSendMessage,
+    
+    // Dynamic AI Mutations
     useStartDynamicPlanning,
     useContinueDynamicPlanning,
     useStartDynamicWorkBlock,
     useConfirmWorkBlockDuration,
     useDynamicStateCheck,
     
-    // Utilities
+    // Chat Mutations
+    useSendChatMessage,
+    
+    // Generic API
     apiCall,
   };
 }; 

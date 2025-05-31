@@ -91,13 +91,13 @@ export default function AdaptiveDashboard() {
     
     if (hasActiveSession) {
       // Navigate to existing session
-      router.push('/session');
+      router.push('./chat');
     } else {
       // Start new dynamic planning session via backend
       try {
         const response = await startPlanningMutation.mutateAsync(ENV.DEV_USER_ID);
         if (response.success) {
-          router.push('/session');
+          router.push('./chat');
         } else {
           Alert.alert('Error', 'Failed to start session. Please try again.');
         }
@@ -105,11 +105,6 @@ export default function AdaptiveDashboard() {
         Alert.alert('Error', 'Could not connect to backend. Please check if the server is running.');
       }
     }
-  };
-
-  const handleTalkToAI = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/session');
   };
 
   // Show connection status
@@ -134,7 +129,7 @@ export default function AdaptiveDashboard() {
       };
     } else {
       return {
-        label: '[Ready]',
+        label: '',
         text: 'Start Planning',
         subtext: 'Tap to begin your ADHD session',
         isTimer: false
@@ -146,7 +141,7 @@ export default function AdaptiveDashboard() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0f0f1a" />
       
       {/* Header with Connection Status */}
       <View style={styles.header}>
@@ -163,11 +158,6 @@ export default function AdaptiveDashboard() {
             {isLoading ? 'Connecting...' : isConnected ? 'Connected' : 'Offline'}
           </Text>
         </View>
-        {dynamicStatus?.status && (
-          <Text style={styles.systemInfo}>
-            System: {dynamicStatus.status.system_type || 'Dynamic AI'}
-          </Text>
-        )}
       </View>
 
       <View style={styles.content}>
@@ -195,26 +185,6 @@ export default function AdaptiveDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* OR Divider (only show when not in active session) */}
-        {!hasActiveSession && (
-          <Text style={styles.orText}>OR</Text>
-        )}
-
-        {/* Talk to AI Now Button */}
-        <TouchableOpacity 
-          style={[
-            styles.aiButton,
-            { opacity: isConnected ? 1 : 0.6 }
-          ]}
-          onPress={handleTalkToAI}
-          disabled={!isConnected}
-        >
-          <Text style={styles.aiButtonText}>Talk to AI Now</Text>
-          <Text style={styles.aiButtonSubtext}>
-            {isConnected ? '(Voice Mode)' : '(Offline)'}
-          </Text>
-        </TouchableOpacity>
-
         {/* Error Display */}
         {(healthError || statusError) && (
           <View style={styles.errorContainer}>
@@ -237,34 +207,37 @@ export default function AdaptiveDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f0f1a', // Deep dark background
   },
   header: {
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 25,
     paddingHorizontal: 20,
+    backgroundColor: 'rgba(20, 20, 35, 0.95)', // Semi-transparent dark header
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(99, 102, 241, 0.2)', // Subtle purple border
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: '#ffffff',
     textAlign: 'center',
+    marginBottom: 10,
   },
   content: {
     flex: 1,
     padding: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 40,
+    gap: 35,
   },
   sectionLabel: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#7f8c8d',
-    marginBottom: 15,
+    color: '#a5a5d6', // Soft purple-gray
+    marginBottom: 20,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   sessionContainer: {
     width: '100%',
@@ -272,121 +245,120 @@ const styles = StyleSheet.create({
   },
   sessionButton: {
     width: '100%',
-    backgroundColor: '#3498db',
-    padding: 25,
-    borderRadius: 8,
+    backgroundColor: '#5b6cf7', // Beautiful blue-purple
+    padding: 30,
+    borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#5b6cf7',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   sessionButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 5,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 8,
+    letterSpacing: 0.3,
   },
   sessionStatusText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
   },
   timerBox: {
     width: '100%',
-    backgroundColor: '#ecf0f1',
-    padding: 25,
-    borderRadius: 8,
+    backgroundColor: 'rgba(31, 31, 50, 0.8)', // Dark semi-transparent
+    padding: 30,
+    borderRadius: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#bdc3c7',
+    borderColor: 'rgba(139, 92, 246, 0.3)', // Purple border
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
   },
   timerLabel: {
-    fontSize: 16,
-    color: '#2c3e50',
-    marginBottom: 10,
+    fontSize: 18,
+    color: '#c7c7e8',
+    marginBottom: 15,
+    fontWeight: '600',
   },
   timerText: {
-    fontSize: 32,
+    fontSize: 42,
     fontWeight: 'bold',
-    color: '#e74c3c',
+    color: '#ff6b9d', // Bright pink for timer
     fontVariant: ['tabular-nums'],
-  },
-  orText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#95a5a6',
-    textAlign: 'center',
-  },
-  aiButton: {
-    width: '100%',
-    backgroundColor: '#2ecc71',
-    padding: 25,
-    borderRadius: 8,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  aiButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 5,
-  },
-  aiButtonSubtext: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    textShadowColor: 'rgba(255, 107, 157, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    marginTop: 5,
   },
   statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
   statusText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2c3e50',
+    color: '#ffffff',
   },
   systemInfo: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: '#9ca3d4',
     textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   errorContainer: {
     width: '100%',
-    padding: 20,
-    backgroundColor: '#f39c12',
-    borderRadius: 8,
+    padding: 25,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)', // Semi-transparent red
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   errorText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
+    color: '#fca5a5', // Light red
     marginBottom: 20,
+    textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#2ecc71',
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: '#10b981', // Green
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   retryText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
+    color: '#ffffff',
   },
   timerSubtext: {
-    fontSize: 14,
-    color: '#7f8c8d',
-    marginTop: 5,
+    fontSize: 15,
+    color: '#a5a5d6',
+    marginTop: 8,
+    fontWeight: '500',
   },
 });

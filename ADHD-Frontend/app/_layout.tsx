@@ -34,12 +34,6 @@ export default function RootLayout() {
             title: 'ADHD Companion'
           }}
         />
-        <Stack.Screen 
-          name="session" 
-          options={{
-            title: 'AI Voice Mode'
-          }}
-        />
       </Stack>
     </QueryClientProvider>
   );

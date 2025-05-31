@@ -32,11 +32,6 @@ interface DynamicPlanningResponse {
   system_type: string;
 }
 
-interface VoiceModelsResponse {
-  stt_models: Record<string, any>;
-  tts_models: Record<string, any>;
-}
-
 // API Service with all backend endpoints
 export class ADHDApiService {
   
@@ -127,17 +122,6 @@ export class ADHDApiService {
     return response.data;
   }
 
-  // Voice Integration
-  static async getAvailableVoices(): Promise<any> {
-    const response = await api.get('/api/voice/voices');
-    return response.data;
-  }
-
-  static async getVoiceModels(): Promise<VoiceModelsResponse> {
-    const response = await api.get('/api/voice/models');
-    return response.data;
-  }
-
   // User Analytics  
   static async getUserSessions(
     userId: number, 
@@ -159,17 +143,15 @@ export class ADHDApiService {
     return response.data;
   }
 
-  // Legacy Chat (for compatibility)
-  static async sendChatMessage(text: string): Promise<any> {
-    const response = await api.post('/chat', { text });
+  // Chat Messaging
+  static async sendChatMessage(text: string, userId: number = 1): Promise<any> {
+    const response = await api.post('/api/chat', { 
+      text: text,
+      user_id: userId 
+    });
     return response.data;
   }
 }
-
-// WebSocket URL for voice integration
-export const getVoiceWebSocketUrl = (sessionId: string): string => {
-  return `${ENV.WS_URL}/ws/voice/${sessionId}`;
-};
 
 // Error handling interceptor
 api.interceptors.response.use(

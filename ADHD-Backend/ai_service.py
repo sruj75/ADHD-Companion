@@ -55,7 +55,7 @@ class AdaptiveAIService:
             print("Running in mock mode - add GROQ_API_KEY to enable AI features")
             self.client = None
         
-        self.model = "llama-3.1-70b-versatile"
+        self.model = "llama-3.1-8b-instant"
         
     def get_session_starter(self, session_type, user_context: Dict = None) -> str:
         """
@@ -147,7 +147,7 @@ class AdaptiveAIService:
         """
         
         try:
-            response = await self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": analysis_prompt}],
                 temperature=0.3  # Lower temperature for more consistent analysis
@@ -253,7 +253,7 @@ class AdaptiveAIService:
         """
         
         try:
-            response = await self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": detection_prompt}],
                 temperature=0.2
@@ -358,7 +358,7 @@ class AdaptiveAIService:
         """
         
         try:
-            response = await self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": response_prompt}],
                 temperature=0.7,
@@ -537,7 +537,7 @@ class AdaptiveAIService:
             messages = self._build_voice_conversation_context(user_input, conversation_context)
             
             # Generate response
-            response = await self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,  # Slightly higher for more natural conversation
@@ -642,6 +642,126 @@ class AdaptiveAIService:
         
         else:
             return "I hear you. Can you tell me more about what's on your mind or what you'd like to work on today?"
+
+    async def process_chat_conversation(
+        self, 
+        user_message: str, 
+        user_context: Dict,
+        session_type: str = "chat_conversation"
+    ) -> str:
+        """
+        Process chat message and generate appropriate response
+        Optimized for text-based interaction and ADHD users
+        
+        Args:
+            user_message: User's text message
+            user_context: User context and conversation history
+            session_type: Type of chat session
+            
+        Returns:
+            AI response optimized for text display
+        """
+        
+        if not self.client:
+            return self._get_fallback_chat_response(user_message)
+        
+        try:
+            # Build conversation context for chat mode
+            messages = self._build_chat_conversation_context(user_message, user_context)
+            
+            # Generate response (NOT async)
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.9,  # Higher for more casual, natural conversation
+                max_tokens=150    # Much shorter responses for casual chat
+            )
+            
+            ai_response = response.choices[0].message.content
+            
+            # Optimize response for text display
+            return self._optimize_for_chat(ai_response)
+            
+        except Exception as e:
+            print(f"Chat conversation error: {e}")
+            return self._get_fallback_chat_response(user_message)
+    
+    def _build_chat_conversation_context(self, user_message: str, user_context: Dict) -> List[Dict]:
+        """Build conversation context specifically for chat interactions"""
+        
+        system_prompt = """You are a helpful ADHD buddy chatting over coffee. Keep it super casual and short.
+
+CHAT STYLE:
+- Keep responses under 2-3 sentences max
+- Talk like a supportive friend, not a formal assistant  
+- No bullet points or structured lists
+- Be warm, understanding, but brief
+- Ask ONE simple question to keep the conversation going
+- Use casual language and contractions (you're, let's, I'd, etc.)
+- If they need planning help, suggest ONE thing at a time
+
+Remember: Short, friendly, conversational - like texting a good friend who gets ADHD."""
+        
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history from context
+        recent_conversations = user_context.get("recent_conversations", [])
+        
+        # Include last 6 interactions to keep context but not overwhelm
+        for conv in recent_conversations[-6:]:
+            if conv.get("user_message") and conv.get("ai_response"):
+                messages.append({"role": "user", "content": conv["user_message"]})
+                messages.append({"role": "assistant", "content": conv["ai_response"]})
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        return messages
+    
+    def _optimize_for_chat(self, text: str) -> str:
+        """Optimize AI response for text display in chat interface"""
+        
+        # Clean up the text but preserve useful formatting
+        optimized = text.strip()
+        
+        # Ensure proper paragraph breaks for readability
+        optimized = optimized.replace('\n\n\n', '\n\n')
+        
+        # Limit length but allow longer responses than voice
+        if len(optimized) > 800:
+            # Split at paragraph boundaries and take first few paragraphs
+            paragraphs = optimized.split('\n\n')
+            optimized = '\n\n'.join(paragraphs[:3])
+            if not optimized.endswith(('.', '!', '?')):
+                optimized += "..."
+        
+        return optimized.strip()
+    
+    def _get_fallback_chat_response(self, user_message: str) -> str:
+        """Fallback responses when AI service is unavailable for chat"""
+        
+        user_lower = user_message.lower()
+        
+        if any(word in user_lower for word in ["help", "planning", "plan", "schedule"]):
+            return "I'd love to help you plan! What's the main thing you want to tackle today?"
+        
+        elif any(word in user_lower for word in ["overwhelmed", "stressed", "too much", "anxious"]):
+            return "That sounds really tough. Let's just pick one small thing to start with - what feels manageable right now?"
+        
+        elif any(word in user_lower for word in ["tired", "exhausted", "low energy", "drained"]):
+            return "When you're feeling low energy, shorter chunks work better. Maybe try just 20-25 minutes on something easy?"
+        
+        elif any(word in user_lower for word in ["focused", "ready", "good", "energized", "motivated"]):
+            return "Nice! Sounds like you're in a good headspace. What do you want to dive into?"
+        
+        elif any(word in user_lower for word in ["break", "rest", "pause", "stop"]):
+            return "Good call on taking a break! What sounds good - a quick walk, some music, or just chill for a bit?"
+        
+        elif any(word in user_lower for word in ["thanks", "thank you", "helpful"]):
+            return "You're welcome! How else can I help?"
+        
+        else:
+            return "What's on your mind? I'm here to help with whatever you're working on."
 
 # Create a global instance that can be imported by other modules
 ai_service = AdaptiveAIService()

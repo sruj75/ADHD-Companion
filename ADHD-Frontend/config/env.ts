@@ -7,16 +7,9 @@ export const ENV = {
   // For web development, use localhost; for mobile, use your computer's IP
   API_URL: Constants.expoConfig?.extra?.apiUrl || (__DEV__ 
     ? Platform.OS === 'web' 
-      ? 'http://localhost:8001'  // Web development - use localhost
-      : 'http://192.168.0.103:8001'  // Mobile development - use your computer's IP
+      ? 'http://localhost:8000'  // Web development - use localhost
+      : 'http://192.168.0.103:8000'  // Mobile development - use your computer's IP
     : 'https://your-production-url.com'),
-    
-  // WebSocket URL for voice integration
-  WS_URL: Constants.expoConfig?.extra?.wsUrl || (__DEV__
-    ? Platform.OS === 'web'
-      ? 'ws://localhost:8001'    // Web development - use localhost
-      : 'ws://192.168.0.103:8001'    // Mobile development - use your computer's IP
-    : 'wss://your-production-url.com'),
     
   // Other environment variables
   APP_NAME: 'ADHD Companion',
@@ -27,5 +20,4 @@ export const ENV = {
   
   // API timeouts
   API_TIMEOUT: 10000,
-  WS_TIMEOUT: 5000,
 } as const; 
