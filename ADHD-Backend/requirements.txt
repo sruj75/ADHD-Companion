@@ -1,4 +1,18 @@
 fastapi
 uvicorn
 openai
-python-dotenv 
+python-dotenv
+# Database and State Management
+sqlalchemy
+alembic
+psycopg2-binary
+# Real-time Communication
+websockets
+# Background Tasks and Monitoring
+celery
+redis
+# JSON handling (usually included with Python)
+# Text analysis for enhanced emotional detection
+# nltk  # Uncomment if we want advanced text analysis
+pydantic
+datetime 
