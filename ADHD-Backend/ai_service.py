@@ -504,5 +504,138 @@ class AdaptiveAIService:
         except:
             return {"emotional_state": "neutral", "intervention_needed": "none"}
 
+    async def process_voice_conversation(
+        self, 
+        user_input: str, 
+        conversation_context: List[Dict],
+        session_type: str = "voice_mode"
+    ) -> str:
+        """
+        Process voice input and generate appropriate response
+        Optimized for speech interaction and ADHD users
+        
+        Args:
+            user_input: Transcribed user speech
+            conversation_context: Previous conversation messages
+            session_type: Type of voice session
+            
+        Returns:
+            AI response optimized for speech synthesis
+        """
+        
+        if not self.client:
+            return self._get_fallback_voice_response(user_input)
+        
+        try:
+            # Build conversation context for voice mode
+            messages = self._build_voice_conversation_context(user_input, conversation_context)
+            
+            # Generate response
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,  # Slightly higher for more natural conversation
+                max_tokens=200    # Shorter responses for voice mode
+            )
+            
+            ai_response = response.choices[0].message.content
+            
+            # Optimize response for speech
+            return self._optimize_for_voice(ai_response)
+            
+        except Exception as e:
+            print(f"Voice conversation error: {e}")
+            return self._get_fallback_voice_response(user_input)
+    
+    def _build_voice_conversation_context(self, user_input: str, conversation_context: List[Dict]) -> List[Dict]:
+        """Build conversation context specifically for voice interactions"""
+        
+        system_prompt = """You are an AI executive function assistant for someone with ADHD. 
+        
+        VOICE MODE GUIDELINES:
+        - Keep responses under 50 words when possible
+        - Speak naturally and conversationally  
+        - Use simple, clear language
+        - Ask ONE question at a time
+        - Be supportive and understanding
+        - Help with planning, focus, and emotional regulation
+        - If they seem overwhelmed, simplify your approach
+        - For work planning, suggest specific time blocks (25, 35, or 45 minutes)
+        - Always end with a clear next step or question
+        
+        This is a voice conversation, so be concise but warm."""
+        
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add recent conversation context (last 6 messages to keep it manageable)
+        recent_context = conversation_context[-6:] if len(conversation_context) > 6 else conversation_context
+        
+        for msg in recent_context:
+            if msg["role"] in ["user", "assistant"]:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+        
+        # Add current user input
+        messages.append({"role": "user", "content": user_input})
+        
+        return messages
+    
+    def _optimize_for_voice(self, text: str) -> str:
+        """Optimize AI response for natural speech synthesis"""
+        
+        # Remove markdown and formatting
+        optimized = text.replace("**", "").replace("*", "").replace("_", "")
+        optimized = optimized.replace("\n", ". ")
+        
+        # Replace common abbreviations with full words for better TTS
+        replacements = {
+            "etc.": "and so on",
+            "e.g.": "for example",
+            "i.e.": "that is",
+            "vs.": "versus",
+            "&": "and"
+        }
+        
+        for abbrev, full in replacements.items():
+            optimized = optimized.replace(abbrev, full)
+        
+        # Ensure proper sentence ending
+        if optimized and not optimized.endswith(('.', '!', '?')):
+            optimized += "."
+        
+        # Limit length for better voice processing
+        if len(optimized) > 300:
+            # Split at sentence boundaries and take first 2-3 sentences
+            sentences = optimized.split('. ')
+            optimized = '. '.join(sentences[:2]) + '.'
+        
+        return optimized.strip()
+    
+    def _get_fallback_voice_response(self, user_input: str) -> str:
+        """Fallback responses when AI service is unavailable"""
+        
+        # Simple keyword-based responses for voice mode
+        user_lower = user_input.lower()
+        
+        if any(word in user_lower for word in ["help", "planning", "plan"]):
+            return "I'd love to help you plan your day. What's the most important thing you want to focus on right now?"
+        
+        elif any(word in user_lower for word in ["overwhelmed", "stressed", "too much"]):
+            return "It sounds like you're feeling overwhelmed. Let's take this one step at a time. What's one small thing you could do right now?"
+        
+        elif any(word in user_lower for word in ["tired", "exhausted", "low energy"]):
+            return "When you're feeling tired, shorter work blocks can be really helpful. Would you like to try a gentle 25-minute session?"
+        
+        elif any(word in user_lower for word in ["focused", "ready", "good", "energized"]):
+            return "That's great to hear! When you're feeling focused, you might want to try a longer 45-minute work block. What would you like to work on?"
+        
+        elif any(word in user_lower for word in ["break", "rest", "pause"]):
+            return "Taking breaks is so important for ADHD brains. What kind of break sounds good to you right now?"
+        
+        else:
+            return "I hear you. Can you tell me more about what's on your mind or what you'd like to work on today?"
+
 # Create a global instance that can be imported by other modules
 ai_service = AdaptiveAIService()

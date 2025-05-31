@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
@@ -12,6 +12,7 @@ from session_service import SessionService
 from models import SessionType, SessionStatus, User
 from ai_service import ai_service
 from timer_service import DynamicTimerService
+from voice_websocket import voice_websocket_manager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,7 +20,7 @@ load_dotenv()
 # Initialize FastAPI
 app = FastAPI(
     title="ADHD Companion API",
-    description="Dynamic AI-powered executive function replacement for ADHD individuals",
+    description="Dynamic AI-powered executive function replacement for ADHD individuals - Now with Voice Integration",
     version="3.0.0"
 )
 
@@ -49,12 +50,12 @@ async def startup_event():
     
     # Create tables if they don't exist
     create_tables()
-    print("✅ ADHD Companion API v3.0 is ready!")
+    print("✅ ADHD Companion API v3.0 with Voice Integration is ready!")
 
 @app.get("/")
 async def root():
     return {
-        "message": "ADHD Companion API v3.0 - Fully Dynamic AI-Driven System",
+        "message": "ADHD Companion API v3.0 - Fully Dynamic AI-Driven System with Voice Integration",
         "status": "healthy",
         "version": "3.0.0",
         "groq_configured": bool(os.environ.get("GROQ_API_KEY")),
@@ -64,9 +65,17 @@ async def root():
             "Fully Adaptive Scheduling (No Hardcoded Values)",
             "Conversational Work Block Creation",
             "Dynamic Break Recommendations",
-            "Executive Function Replacement"
+            "Executive Function Replacement",
+            "🎙️ Voice-First Interface with WebSocket STT/TTS",
+            "🗣️ Real-time Speech Processing with Groq APIs"
         ],
-        "system_type": "fully_dynamic_llm_driven"
+        "system_type": "fully_dynamic_llm_driven_with_voice",
+        "voice_features": {
+            "speech_to_text": "Groq Whisper (ultra-fast)",
+            "text_to_speech": "Groq PlayAI (natural voices)",
+            "real_time": "WebSocket streaming",
+            "adhd_optimized": "Short responses, interruption support"
+        }
     }
 
 @app.get("/health")
@@ -509,6 +518,85 @@ async def legacy_chat(message: dict):
         return {"response": response.choices[0].message.content}
     except Exception as e:
         return {"error": f"Failed to get AI response: {str(e)}"}
+
+# =====================================
+# 🎙️ VOICE WEBSOCKET ENDPOINT
+# =====================================
+
+@app.websocket("/ws/voice/{session_id}")
+async def voice_websocket_endpoint(websocket: WebSocket, session_id: str):
+    """
+    WebSocket endpoint for real-time voice interactions
+    
+    Supports:
+    - Real-time audio streaming (STT)
+    - AI conversation processing  
+    - Speech synthesis streaming (TTS)
+    - Voice state management (listening/thinking/speaking)
+    - Interruption handling
+    """
+    await voice_websocket_manager.connect(websocket, session_id)
+    await voice_websocket_manager.handle_voice_session(websocket, session_id)
+
+# =====================================
+# REST API VOICE ENDPOINTS
+# =====================================
+
+@app.get("/api/voice/voices")
+async def get_available_voices():
+    """Get list of available TTS voices"""
+    from voice_service import voice_service
+    
+    return {
+        "available_voices": voice_service.get_available_voices(),
+        "default_voice": voice_service.default_voice,
+        "voice_recommendations": {
+            "calm": "Calum-PlayAI",
+            "professional": "Arista-PlayAI",
+            "friendly": "Mason-PlayAI", 
+            "warm": "Celeste-PlayAI",
+            "confident": "Atlas-PlayAI",
+            "gentle": "Quinn-PlayAI"
+        }
+    }
+
+@app.get("/api/voice/models") 
+async def get_voice_models():
+    """Get available STT and TTS models"""
+    return {
+        "stt_models": {
+            "whisper-large-v3-turbo": {
+                "description": "Fastest multilingual model",
+                "cost_per_hour": "$0.04",
+                "real_time_factor": "216x",
+                "languages": "multilingual"
+            },
+            "whisper-large-v3": {
+                "description": "Highest accuracy multilingual",
+                "cost_per_hour": "$0.111", 
+                "real_time_factor": "189x",
+                "languages": "multilingual"
+            },
+            "distil-whisper-large-v3-en": {
+                "description": "Fastest English-only",
+                "cost_per_hour": "$0.02",
+                "real_time_factor": "250x", 
+                "languages": "english_only"
+            }
+        },
+        "tts_models": {
+            "playai-tts": {
+                "description": "Natural English voices",
+                "voices": 19,
+                "languages": ["english"]
+            },
+            "playai-tts-arabic": {
+                "description": "Arabic voices",
+                "voices": 4,
+                "languages": ["arabic"]
+            }
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn

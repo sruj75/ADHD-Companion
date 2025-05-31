@@ -1,303 +1,111 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Text, 
-  View, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Animated,
-  Alert,
-  Dimensions 
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
-import * as Speech from 'expo-speech';
-import { Audio } from 'expo-av';
-import { apiService } from '../config/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
-// Get screen dimensions for responsive design
 const { width, height } = Dimensions.get('window');
 
-// Voice agent states
-type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
+// Mock session state - replace with real API
+const mockSessionState = {
+  hasActiveSession: false, // Toggle this to show different states
+  nextSessionTime: 25 * 60 + 30, // 25:30 in seconds - TODO: Make this dynamic from backend
+  sessionType: "Morning Planning"
+};
 
-export default function VoiceAgent() {
-  // State management
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [transcript, setTranscript] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  
-  // Animation references
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  
-  // Audio recording reference
-  const recording = useRef<Audio.Recording | null>(null);
+// LAYERED LOGIC:
+// 1. If there are active sessions -> show [Active Session] 
+// 2. If no active sessions -> show [Timer Mode] with countdown
+// 3. Always show "Talk to AI Now" as override option
 
-  // Set up audio permissions and configuration
+export default function AdaptiveDashboard() {
+  const [timeRemaining, setTimeRemaining] = useState(mockSessionState.nextSessionTime);
+  const [hasActiveSession, setHasActiveSession] = useState(mockSessionState.hasActiveSession);
+  const router = useRouter();
+
+  // Countdown timer for next session
   useEffect(() => {
-    setupAudio();
-  }, []);
-
-  // Animation effects based on voice state
-  useEffect(() => {
-    startAnimation();
-  }, [voiceState]);
-
-  const setupAudio = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant microphone permission to use voice features');
-        return;
-      }
-      
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-    } catch (error) {
-      console.error('Audio setup failed:', error);
+    if (!hasActiveSession && timeRemaining > 0) {
+      const interval = setInterval(() => {
+        setTimeRemaining(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
     }
+  }, [hasActiveSession, timeRemaining]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Pulse animation for different states
-  const startAnimation = () => {
-    // Stop any existing animations
-    pulseAnim.stopAnimation();
-    glowAnim.stopAnimation();
-
-    switch (voiceState) {
-      case 'listening':
-        // Fast pulse for listening
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.3,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-        
-        // Glow effect
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(glowAnim, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(glowAnim, {
-              toValue: 0,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-        break;
-
-      case 'processing':
-        // Slow continuous pulse for thinking
-        Animated.loop(
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 1500,
-            useNativeDriver: true,
-          })
-        ).start();
-        break;
-
-      case 'speaking':
-        // Quick pulse for speaking
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.2,
-              duration: 400,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 400,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-        break;
-
-      default:
-        // Reset to normal state
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-        
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-    }
+  const handleStartSession = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setHasActiveSession(true);
+    router.push('/session');
   };
 
-  // Start voice recording
-  const startListening = async () => {
-    try {
-      setVoiceState('listening');
-      setTranscript('Listening...');
-      
-      // For now, we'll simulate speech recognition
-      // In a real app, you'd use a speech recognition service
-      simulateSpeechRecognition();
-      
-    } catch (error) {
-      console.error('Failed to start listening:', error);
-      setVoiceState('idle');
-    }
-  };
-
-  // Simulate speech recognition (replace with real STT)
-  const simulateSpeechRecognition = () => {
-    setTimeout(() => {
-      const sampleText = "Help me focus on my daily tasks";
-      setTranscript(sampleText);
-      processUserInput(sampleText);
-    }, 3000);
-  };
-
-  // Process user input and get AI response
-  const processUserInput = async (userText: string) => {
-    try {
-      setVoiceState('processing');
-      setAiResponse('Thinking...');
-
-      // Send to your FastAPI backend
-      const response = await apiService.sendMessage(userText);
-      
-      if (response.data.response) {
-        setAiResponse(response.data.response);
-        speakResponse(response.data.response);
-      } else {
-        throw new Error('No response from AI');
-      }
-      
-    } catch (error) {
-      console.error('Failed to process input:', error);
-      const fallbackResponse = "I'm having trouble connecting right now. Please try again.";
-      setAiResponse(fallbackResponse);
-      speakResponse(fallbackResponse);
-    }
-  };
-
-  // Text-to-Speech for AI responses
-  const speakResponse = (text: string) => {
-    setVoiceState('speaking');
-    
-    Speech.speak(text, {
-      voice: 'com.apple.ttsbundle.Samantha-compact', // iOS voice
-      rate: 0.9,
-      pitch: 1.0,
-      onDone: () => {
-        setVoiceState('idle');
-      },
-      onError: (error) => {
-        console.error('TTS Error:', error);
-        setVoiceState('idle');
-      }
-    });
-  };
-
-  // Stop current action
-  const stopAction = () => {
-    Speech.stop();
-    setVoiceState('idle');
-    setTranscript('');
-    setAiResponse('');
-  };
-
-  // Get circle color based on state
-  const getCircleColor = () => {
-    switch (voiceState) {
-      case 'listening': return '#4ECDC4'; // Teal for listening
-      case 'processing': return '#FFE66D'; // Yellow for thinking
-      case 'speaking': return '#FF6B6B'; // Red for speaking
-      default: return '#A8E6CF'; // Light green for idle
-    }
-  };
-
-  // Get status text
-  const getStatusText = () => {
-    switch (voiceState) {
-      case 'listening': return 'Listening...';
-      case 'processing': return 'Thinking...';
-      case 'speaking': return 'Speaking...';
-      default: return 'Tap to start conversation';
-    }
+  const handleTalkToAI = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/session');
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Simple Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>ADHD Voice Assistant</Text>
-        <Text style={styles.subtitle}>Your AI companion for focus and productivity</Text>
+        <Text style={styles.title}>ADHD Companion</Text>
       </View>
 
-      {/* Voice Circle */}
-      <View style={styles.voiceContainer}>
-        <Animated.View
-          style={[
-            styles.glowRing,
-            {
-              opacity: glowAnim,
-              backgroundColor: getCircleColor(),
-            }
-          ]}
-        />
+      <View style={styles.content}>
         
-        <TouchableOpacity
-          style={[styles.voiceButton, { backgroundColor: getCircleColor() }]}
-          onPress={voiceState === 'idle' ? startListening : stopAction}
-          activeOpacity={0.8}
+        {/* Active Session OR Timer Mode */}
+        {hasActiveSession ? (
+          // Active Session State
+          <View style={styles.sessionContainer}>
+            <Text style={styles.sectionLabel}>[Active Session]</Text>
+            <TouchableOpacity 
+              style={styles.sessionButton}
+              onPress={handleStartSession}
+            >
+              <Text style={styles.sessionButtonText}>Start Session</Text>
+              <Text style={styles.sessionStatusText}>(Available)</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Timer Mode State
+          <View style={styles.sessionContainer}>
+            <Text style={styles.sectionLabel}>[Timer Mode]</Text>
+            <View style={styles.timerBox}>
+              <Text style={styles.timerLabel}>Next Session In</Text>
+              <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* OR Divider (only show when in timer mode) */}
+        {!hasActiveSession && (
+          <Text style={styles.orText}>OR</Text>
+        )}
+
+        {/* Talk to AI Now Button */}
+        <TouchableOpacity 
+          style={styles.aiButton}
+          onPress={handleTalkToAI}
         >
-          <Animated.View
-            style={[
-              styles.voiceButtonInner,
-              {
-                transform: [{ scale: pulseAnim }],
-              }
-            ]}
-          >
-            <Text style={styles.voiceButtonText}>
-              {voiceState === 'idle' ? '🎤' : '⏹️'}
-            </Text>
-          </Animated.View>
+          <Text style={styles.aiButtonText}>Talk to AI Now</Text>
+          <Text style={styles.aiButtonSubtext}>(Override)</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Status */}
-      <Text style={styles.statusText}>{getStatusText()}</Text>
-
-      {/* Conversation Display */}
-      <View style={styles.conversationContainer}>
-        {transcript ? (
-          <View style={styles.messageContainer}>
-            <Text style={styles.messageLabel}>You said:</Text>
-            <Text style={styles.userMessage}>{transcript}</Text>
-          </View>
-        ) : null}
-        
-        {aiResponse ? (
-          <View style={styles.messageContainer}>
-            <Text style={styles.messageLabel}>AI Assistant:</Text>
-            <Text style={styles.aiMessage}>{aiResponse}</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -306,94 +114,107 @@ export default function VoiceAgent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    backgroundColor: '#ffffff',
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 50,
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#7F8C8D',
+    color: '#2c3e50',
     textAlign: 'center',
   },
-  voiceContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 30,
-  },
-  glowRing: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    opacity: 0.3,
-  },
-  voiceButton: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  voiceButtonInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceButtonText: {
-    fontSize: 40,
-  },
-  statusText: {
-    fontSize: 18,
-    color: '#34495E',
-    marginBottom: 30,
-    fontWeight: '500',
-  },
-  conversationContainer: {
+  content: {
     flex: 1,
-    width: '100%',
-    maxWidth: 400,
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 40,
   },
-  messageContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7f8c8d',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  sessionContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  sessionButton: {
+    width: '100%',
+    backgroundColor: '#3498db',
+    padding: 25,
+    borderRadius: 8,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 3,
   },
-  messageLabel: {
-    fontSize: 12,
+  sessionButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 5,
+  },
+  sessionStatusText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  timerBox: {
+    width: '100%',
+    backgroundColor: '#ecf0f1',
+    padding: 25,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bdc3c7',
+  },
+  timerLabel: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginBottom: 10,
+  },
+  timerText: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#7F8C8D',
-    marginBottom: 8,
-    textTransform: 'uppercase',
+    color: '#e74c3c',
+    fontVariant: ['tabular-nums'],
   },
-  userMessage: {
-    fontSize: 16,
-    color: '#2C3E50',
-    lineHeight: 22,
+  orText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#95a5a6',
+    textAlign: 'center',
   },
-  aiMessage: {
-    fontSize: 16,
-    color: '#27AE60',
-    lineHeight: 22,
+  aiButton: {
+    width: '100%',
+    backgroundColor: '#2ecc71',
+    padding: 25,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  aiButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 5,
+  },
+  aiButtonSubtext: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
 });

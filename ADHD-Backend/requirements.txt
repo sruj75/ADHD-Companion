@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 openai
+groq
 python-dotenv
 # Database and State Management
 sqlalchemy
@@ -11,8 +12,5 @@ websockets
 # Background Tasks and Monitoring
 celery
 redis
-# JSON handling (usually included with Python)
-# Text analysis for enhanced emotional detection
-# nltk  # Uncomment if we want advanced text analysis
-pydantic
-datetime 
+# Additional dependencies
+pydantic 
